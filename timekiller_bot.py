@@ -5,6 +5,7 @@ from telebot import types
 import config
 import telebot
 import random
+import pymysql
 
 telebot.apihelper.proxy = {'https': 'socks5h://139.59.137.156:1080'}
 bot = telebot.TeleBot(config.token_timekiller_bot)
@@ -20,12 +21,19 @@ def end_2048(end):
 
 def add_element(ae):
     zero_points = [[], []]
+    merge = 0
     for i in range(0, 4):
         for j in range(0, 4):
             if ae[i][j] == 0:
                 zero_points[0].append(i)
                 zero_points[1].append(j)
-    if len(zero_points[0]) == 1:
+            if 0 < j < 3:
+                if ae[i][j] == ae[i][j - 1] or ae[i][j] == ae[i][j + 1]:
+                    merge += 1
+            if 0 < i < 3:
+                if ae[i - 1][j] == ae[i][j] or ae[i + 1][j] == ae[i][j]:
+                    merge += 1
+    if len(zero_points[0]) <= 1 and merge == 0:
         temp = end_2048(ae) + (4 if random.randint(1, 10) == 7 else 2)
         ae = [temp, -123234]
         return ae
@@ -85,14 +93,21 @@ def permutation(game_2048):
                 count += 1
             if game_2048[i][j - count] == 0:
                 game_2048[i][j - count], game_2048[i][j] = game_2048[i][j], game_2048[i][j - count]
+                skip_move += 1
             if game_2048[i][j - count] == game_2048[i][j] and game_2048[i][j] != 0:
                 game_2048[i][j - count] *= 2
                 game_2048[i][j] = 0
+                skip_move += 1
                 if j == 1:
                     game_2048[i][1], game_2048[i][2] = game_2048[i][2], game_2048[i][1]
                     game_2048[i][2], game_2048[i][3] = game_2048[i][3], game_2048[i][2]
                 if j == 2:
                     game_2048[i][2], game_2048[i][3] = game_2048[i][3], game_2048[i][2]
+    if skip_move == -1:
+        game_2048 = [[-1, -1, -1, -1],
+                     [-1, -1, -1, -1],
+                     [-1, -1, -1, -1],
+                     [-1, -1, -1, -1]]
     return game_2048
 
 
@@ -148,20 +163,29 @@ def start(message):
 @bot.message_handler(content_types=['text'])
 def find_text(message):
     if message.text == '2️⃣ 0️⃣ 4️⃣ 8️⃣':
+        print(message)
         with open('params.json', 'w') as f:
             json.dump(
                 {'game_2048': add_element([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]), 'top_score': 0}, f,
                 indent=2)
         with open('params.json', 'r') as f:
             load_json = json.load(f)
-        bot.send_message(message.chat.id, "Let's start the game! \n2️⃣ 0️⃣ 4️⃣ 8️⃣\n📜Rules:\n WRITE RULES",
+        bot.send_message(message.chat.id,
+                         "Let's start the game! \n2️⃣ 0️⃣ 4️⃣ 8️⃣\n📜Rules:\n You have to combine various tiles starting with a tile of 2 and combining them together to reach 2048. The combinations include combining \'2\' tile with \'2\' tile to make it into a tile of \'4\' and then combining it with a tile of \'4\' to make a tile of \'8\' and so on.\nPress the corresponding arrows on the custom keyboard and set a new record!",
                          reply_markup=update_keyboard_2048(load_json['game_2048']))
 
     elif message.text == '⬅️':
         with open('params.json', 'r') as f:
             load_json = json.load(f)
         game_2048 = permutation(load_json['game_2048'])
-        game_2048 = add_element(game_2048)
+
+        if game_2048[0][0] == -1:
+            game_2048 = load_json['game_2048']
+            text = "NOPE\n🤛🏼😈🤜🏼"
+        else:
+            game_2048 = add_element(game_2048)
+            text = "⬅ Move left ⬅"
+
         if game_2048[1] == -123234:
             bot.send_message(message.chat.id, "💢  GAME OVER  💢\nYour score: " + str(game_2048[0]) + "!",
                              reply_markup=update_keyboard_2048(game_2048))
@@ -169,13 +193,20 @@ def find_text(message):
             with open('params.json', 'w') as f:
                 json.dump({'game_2048': game_2048, 'top_score': load_json['top_score']}, f, indent=2)
             game_2048 = update_keyboard_2048(game_2048)
-            bot.send_message(message.chat.id, "⬅ Move left ⬅", reply_markup=game_2048)
+            bot.send_message(message.chat.id, text, reply_markup=game_2048)
 
     elif message.text == '⬇️️':
         with open('params.json', 'r') as f:
             load_json = json.load(f)
         game_2048 = swap_all(permutation(swap_all(load_json['game_2048'], 3)), 4)
-        game_2048 = add_element(game_2048)
+
+        if game_2048[0][0] == -1:
+            game_2048 = load_json['game_2048']
+            text = "NOPE\n🤛🏼😈🤜🏼"
+        else:
+            game_2048 = add_element(game_2048)
+            text = "⬇ Move down ⬇"
+
         if game_2048[1] == -123234:
             bot.send_message(message.chat.id, "💢  GAME OVER  💢\nYour score: " + str(game_2048[0]) + "!",
                              reply_markup=update_keyboard_2048(game_2048))
@@ -183,14 +214,20 @@ def find_text(message):
             with open('params.json', 'w') as f:
                 json.dump({'game_2048': game_2048, 'top_score': load_json['top_score']}, f, indent=2)
             game_2048 = update_keyboard_2048(game_2048)
-            bot.send_message(message.chat.id, "⬇ Move down ⬇",
-                             reply_markup=game_2048)
+            bot.send_message(message.chat.id, text, reply_markup=game_2048)
 
     elif message.text == '⬆️️':
         with open('params.json', 'r') as f:
             load_json = json.load(f)
         game_2048 = swap_all(permutation(swap_all(load_json['game_2048'], 2)), 2)
-        game_2048 = add_element(game_2048)
+
+        if game_2048[0][0] == -1:
+            game_2048 = load_json['game_2048']
+            text = "NOPE\n🤛🏼😈🤜🏼"
+        else:
+            game_2048 = add_element(game_2048)
+            text = "⬆️ Move up ⬆️"
+
         if game_2048[1] == -123234:
             bot.send_message(message.chat.id, "💢  GAME OVER  💢\nYour score: " + str(game_2048[0]) + "!",
                              reply_markup=update_keyboard_2048(game_2048))
@@ -198,14 +235,20 @@ def find_text(message):
             with open('params.json', 'w') as f:
                 json.dump({'game_2048': game_2048, 'top_score': load_json['top_score']}, f, indent=2)
             game_2048 = update_keyboard_2048(game_2048)
-            bot.send_message(message.chat.id, "⬆️ Move up ⬆️",
-                             reply_markup=game_2048)
+            bot.send_message(message.chat.id, text, reply_markup=game_2048)
 
     elif message.text == '➡️️':
         with open('params.json', 'r') as f:
             load_json = json.load(f)
         game_2048 = swap_all(permutation(swap_all(load_json['game_2048'], 1)), 1)
-        game_2048 = add_element(game_2048)
+
+        if game_2048[0][0] == -1:
+            game_2048 = load_json['game_2048']
+            text = "NOPE\n🤛🏼😈🤜🏼"
+        else:
+            game_2048 = add_element(game_2048)
+            text = "➡ Move right ➡"
+
         if game_2048[1] == -123234:
             bot.send_message(message.chat.id, "💢  GAME OVER  💢\nYour score: " + str(game_2048[0]) + "!",
                              reply_markup=update_keyboard_2048(game_2048))
@@ -213,7 +256,7 @@ def find_text(message):
             with open('params.json', 'w') as f:
                 json.dump({'game_2048': game_2048, 'top_score': load_json['top_score']}, f, indent=2)
             game_2048 = update_keyboard_2048(game_2048)
-            bot.send_message(message.chat.id, "➡ Move right ➡",
+            bot.send_message(message.chat.id, text,
                              reply_markup=game_2048)
 
     elif message.text == '0' or message.text == '2' or message.text == '4' or message.text == '8' or message.text == '16' \
