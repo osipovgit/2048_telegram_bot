@@ -5,8 +5,10 @@ from telebot import types
 import config
 import telebot
 import random
+import logging
 
-telebot.apihelper.proxy = {'https': 'socks5h://139.59.137.156:1080'}
+logging.basicConfig(filename="logger/timekiller_bot.log", level=logging.INFO)
+# telebot.apihelper.proxy = {'https': 'socks5h://139.59.137.156:1080'}
 bot = telebot.TeleBot(config.token_timekiller_bot)
 
 
@@ -148,6 +150,8 @@ def update_keyboard_2048(game_2048):
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    logging.info("User {uname} [{fn} {ln}] start bot.".format(uname=message.chat.username, fn=message.chat.first_name,
+                                                              ln=message.chat.last_name))
     keyboard = types.ReplyKeyboardMarkup(row_width=4)
     btn1 = types.KeyboardButton("2️⃣ 0️⃣ 4️⃣ 8️⃣")
     keyboard.add(btn1)
@@ -155,9 +159,9 @@ def start(message):
         load_json = json.load(f)
     with open('params.json', 'w') as f:
         load_json.update({str(message.chat.id): {'game_2048': [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
-                                     'username': message.chat.username, 'first_name': message.chat.first_name,
-                                     'last_name': message.chat.last_name, 'top_score': 0}})
-        print(load_json)
+                                                 'username': message.chat.username,
+                                                 'first_name': message.chat.first_name,
+                                                 'last_name': message.chat.last_name, 'top_score': 0}})
         json.dump(load_json, f, indent=2)
 
     bot.send_message(message.chat.id,
@@ -169,12 +173,14 @@ def start(message):
 @bot.message_handler(content_types=['text'])
 def find_text(message):
     if message.text == '2️⃣ 0️⃣ 4️⃣ 8️⃣':
+        logging.info("User {uname} start 2048.".format(uname=message.chat.username))
         with open('params.json', 'r') as f:
             load_json = json.load(f)
         with open('params.json', 'w') as f:
-            load_json.update({str(message.chat.id): {'game_2048': add_element([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]),
-                                         'username': message.chat.username, 'first_name': message.chat.first_name,
-                                         'last_name': message.chat.last_name, 'top_score': load_json[str(message.chat.id)]['top_score']}})
+            load_json.update({str(message.chat.id): {
+                'game_2048': add_element([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]),
+                'username': message.chat.username, 'first_name': message.chat.first_name,
+                'last_name': message.chat.last_name, 'top_score': load_json[str(message.chat.id)]['top_score']}})
             json.dump(load_json, f, indent=2)
 
         with open('params.json', 'r') as f:
@@ -201,6 +207,8 @@ def find_text(message):
             text = "⬅ Move left ⬅"
 
         if game_2048[1] == -123234:
+            logging.info("User {uname} lose game: 2048 | score: {score}.".format(uname=message.chat.username,
+                                                                                 score=str(game_2048[0])))
             bot.send_message(message.chat.id, "💢  GAME OVER  💢\nYour score: " + str(game_2048[0]) + "!",
                              reply_markup=update_keyboard_2048(game_2048))
         else:
@@ -229,6 +237,8 @@ def find_text(message):
             text = "⬇ Move down ⬇"
 
         if game_2048[1] == -123234:
+            logging.info("User {uname} lose game: 2048 | score: {score}.".format(uname=message.chat.username,
+                                                                                 score=str(game_2048[0])))
             bot.send_message(message.chat.id, "💢  GAME OVER  💢\nYour score: " + str(game_2048[0]) + "!",
                              reply_markup=update_keyboard_2048(game_2048))
         else:
@@ -257,6 +267,8 @@ def find_text(message):
             text = "⬆️ Move up ⬆️"
 
         if game_2048[1] == -123234:
+            logging.info("User {uname} lose game: 2048 | score: {score}.".format(uname=message.chat.username,
+                                                                                 score=str(game_2048[0])))
             bot.send_message(message.chat.id, "💢  GAME OVER  💢\nYour score: " + str(game_2048[0]) + "!",
                              reply_markup=update_keyboard_2048(game_2048))
         else:
@@ -284,6 +296,8 @@ def find_text(message):
             text = "➡ Move right ➡"
 
         if game_2048[1] == -123234:
+            logging.info("User {uname} lose game: 2048 | score: {score}.".format(uname=message.chat.username,
+                                                                                 score=str(game_2048[0])))
             bot.send_message(message.chat.id, "💢  GAME OVER  💢\nYour score: " + str(game_2048[0]) + "!",
                              reply_markup=update_keyboard_2048(game_2048))
         else:
