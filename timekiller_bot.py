@@ -151,10 +151,15 @@ def start(message):
     keyboard = types.ReplyKeyboardMarkup(row_width=4)
     btn1 = types.KeyboardButton("2️⃣ 0️⃣ 4️⃣ 8️⃣")
     keyboard.add(btn1)
+    with open('params.json', 'r') as f:
+        load_json = json.load(f)
     with open('params.json', 'w') as f:
-        json.dump({message.chat.id: {'game_2048': [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
+        load_json.update({str(message.chat.id): {'game_2048': [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
                                      'username': message.chat.username, 'first_name': message.chat.first_name,
-                                     'last_name': message.chat.last_name, 'top_score': 0}}, f, indent=2)
+                                     'last_name': message.chat.last_name, 'top_score': 0}})
+        print(load_json)
+        json.dump(load_json, f, indent=2)
+
     bot.send_message(message.chat.id,
                      "Settle down, relax and get comfy because you, my friend... are going nowhere.\n"
                      + "How about we play one more game, " + message.chat.first_name + "?",
@@ -164,11 +169,14 @@ def start(message):
 @bot.message_handler(content_types=['text'])
 def find_text(message):
     if message.text == '2️⃣ 0️⃣ 4️⃣ 8️⃣':
+        with open('params.json', 'r') as f:
+            load_json = json.load(f)
         with open('params.json', 'w') as f:
-            game_start = add_element([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]])
-            json.dump({message.chat.id: {'game_2048': game_start,
+            load_json.update({str(message.chat.id): {'game_2048': add_element([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]),
                                          'username': message.chat.username, 'first_name': message.chat.first_name,
-                                         'last_name': message.chat.last_name, 'top_score': 0}}, f, indent=2)
+                                         'last_name': message.chat.last_name, 'top_score': load_json[str(message.chat.id)]['top_score']}})
+            json.dump(load_json, f, indent=2)
+
         with open('params.json', 'r') as f:
             load_json = json.load(f)
         bot.send_message(message.chat.id,
@@ -196,11 +204,15 @@ def find_text(message):
             bot.send_message(message.chat.id, "💢  GAME OVER  💢\nYour score: " + str(game_2048[0]) + "!",
                              reply_markup=update_keyboard_2048(game_2048))
         else:
+            with open('params.json', 'r') as f:
+                load_json = json.load(f)
             with open('params.json', 'w') as f:
-                json.dump({message.chat.id: {'game_2048': game_2048,
-                                             'username': message.chat.username, 'first_name': message.chat.first_name,
-                                             'last_name': message.chat.last_name,
-                                             'top_score': load_json[str(message.chat.id)]['top_score']}}, f, indent=2)
+                load_json.update({str(message.chat.id): {
+                    'game_2048': game_2048,
+                    'username': message.chat.username, 'first_name': message.chat.first_name,
+                    'last_name': message.chat.last_name, 'top_score': load_json[str(message.chat.id)]['top_score']}})
+                json.dump(load_json, f, indent=2)
+
             game_2048 = update_keyboard_2048(game_2048)
             bot.send_message(message.chat.id, text, reply_markup=game_2048)
 
@@ -220,11 +232,15 @@ def find_text(message):
             bot.send_message(message.chat.id, "💢  GAME OVER  💢\nYour score: " + str(game_2048[0]) + "!",
                              reply_markup=update_keyboard_2048(game_2048))
         else:
+            with open('params.json', 'r') as f:
+                load_json = json.load(f)
             with open('params.json', 'w') as f:
-                json.dump({message.chat.id: {'game_2048': game_2048,
-                                             'username': message.chat.username, 'first_name': message.chat.first_name,
-                                             'last_name': message.chat.last_name,
-                                             'top_score': load_json[str(message.chat.id)]['top_score']}}, f, indent=2)
+                load_json.update({str(message.chat.id): {
+                    'game_2048': game_2048,
+                    'username': message.chat.username, 'first_name': message.chat.first_name,
+                    'last_name': message.chat.last_name, 'top_score': load_json[str(message.chat.id)]['top_score']}})
+                json.dump(load_json, f, indent=2)
+
             game_2048 = update_keyboard_2048(game_2048)
             bot.send_message(message.chat.id, text, reply_markup=game_2048)
 
@@ -244,11 +260,15 @@ def find_text(message):
             bot.send_message(message.chat.id, "💢  GAME OVER  💢\nYour score: " + str(game_2048[0]) + "!",
                              reply_markup=update_keyboard_2048(game_2048))
         else:
+            with open('params.json', 'r') as f:
+                load_json = json.load(f)
             with open('params.json', 'w') as f:
-                json.dump({message.chat.id: {'game_2048': game_2048,
-                                             'username': message.chat.username, 'first_name': message.chat.first_name,
-                                             'last_name': message.chat.last_name,
-                                             'top_score': load_json[str(message.chat.id)]['top_score']}}, f, indent=2)
+                load_json.update({str(message.chat.id): {
+                    'game_2048': game_2048,
+                    'username': message.chat.username, 'first_name': message.chat.first_name,
+                    'last_name': message.chat.last_name, 'top_score': load_json[str(message.chat.id)]['top_score']}})
+                json.dump(load_json, f, indent=2)
+
             game_2048 = update_keyboard_2048(game_2048)
             bot.send_message(message.chat.id, text, reply_markup=game_2048)
 
@@ -267,11 +287,15 @@ def find_text(message):
             bot.send_message(message.chat.id, "💢  GAME OVER  💢\nYour score: " + str(game_2048[0]) + "!",
                              reply_markup=update_keyboard_2048(game_2048))
         else:
+            with open('params.json', 'r') as f:
+                load_json = json.load(f)
             with open('params.json', 'w') as f:
-                json.dump({message.chat.id: {'game_2048': game_2048,
-                                             'username': message.chat.username, 'first_name': message.chat.first_name,
-                                             'last_name': message.chat.last_name,
-                                             'top_score': load_json[str(message.chat.id)]['top_score']}}, f, indent=2)
+                load_json.update({str(message.chat.id): {
+                    'game_2048': game_2048,
+                    'username': message.chat.username, 'first_name': message.chat.first_name,
+                    'last_name': message.chat.last_name, 'top_score': load_json[str(message.chat.id)]['top_score']}})
+                json.dump(load_json, f, indent=2)
+
             game_2048 = update_keyboard_2048(game_2048)
             bot.send_message(message.chat.id, text,
                              reply_markup=game_2048)
