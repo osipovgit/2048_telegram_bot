@@ -7,7 +7,7 @@ import telebot
 import random
 import pymysql
 
-telebot.apihelper.proxy = {'https': 'socks5h://139.59.137.156:1080'}
+#telebot.apihelper.proxy = {'http': 'socks5h://139.59.137.156:1080'}
 bot = telebot.TeleBot(config.token_timekiller_bot)
 
 
@@ -240,13 +240,12 @@ def find_text(message):
     elif message.text == '➡️️':
         with open('params.json', 'r') as f:
             load_json = json.load(f)
-        game_2048 = swap_all(permutation(swap_all(load_json['game_2048'], 1)), 1)
-
+        game_2048 = permutation(swap_all(load_json['game_2048'], 1))
         if game_2048[0][0] == -1:
-            game_2048 = load_json['game_2048']
+            game_2048 = swap_all(load_json['game_2048'], 1)
             text = "NOPE\n🤛🏼😈🤜🏼"
         else:
-            game_2048 = add_element(game_2048)
+            game_2048 = add_element(swap_all(game_2048, 1))
             text = "➡ Move right ➡"
 
         if game_2048[1] == -123234:
