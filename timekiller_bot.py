@@ -12,11 +12,11 @@ telebot.apihelper.proxy = config.proxy
 bot = telebot.TeleBot(config.token_timekiller_bot)
 
 
-def count_score_2048(end):
+def count_score_2048(count_end):
     top_score = 0
     for i in range(0, 4):
         for j in range(0, 4):
-            top_score += end[i][j]
+            top_score += count_end[i][j]
     return top_score
 
 
