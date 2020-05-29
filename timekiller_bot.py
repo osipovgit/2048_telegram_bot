@@ -58,7 +58,7 @@ def add_element(ae):
         return add_element(ae)
     if len(zero_points[0]) == 0 and merge == 0:
         temp = count_score_2048(ae) + (4 if random.randint(1, 10) == 7 else 2)
-        return [temp, -123234]
+        return [temp, 'end_game']
     else:
         if len(zero_points[0]) != 0:
             i = random.randint(0, len(zero_points[0]) - 1)
@@ -134,7 +134,7 @@ def permutation(game_2048):
 
 
 def update_keyboard_2048(game_2048):
-    if game_2048[1] == -123234:
+    if game_2048[1] == 'end_game':
         keyboard = types.ReplyKeyboardMarkup(row_width=1)
         btn = types.KeyboardButton("2️⃣ 0️⃣ 4️⃣ 8️⃣")
         keyboard.add(btn)
@@ -227,7 +227,7 @@ def find_text(message):
             game_2048 = add_element(game_2048)
             text = "⬅ Move left ⬅"
 
-        if game_2048[1] == -123234:
+        if game_2048[1] == 'end_game':
             final_2048(message, game_2048)
         else:
             with open('params.json', 'r') as f:
@@ -255,7 +255,7 @@ def find_text(message):
             game_2048 = add_element(game_2048)
             text = "⬇ Move down ⬇"
 
-        if game_2048[1] == -123234:
+        if game_2048[1] == 'end_game':
             final_2048(message, game_2048)
         else:
             with open('params.json', 'r') as f:
@@ -282,7 +282,7 @@ def find_text(message):
             game_2048 = add_element(game_2048)
             text = "⬆️ Move up ⬆️"
 
-        if game_2048[1] == -123234:
+        if game_2048[1] == 'end_game':
             final_2048(message, game_2048)
         else:
             with open('params.json', 'r') as f:
@@ -308,7 +308,7 @@ def find_text(message):
             game_2048 = add_element(swap_all(game_2048, "move_right"))
             text = "➡ Move right ➡"
 
-        if game_2048[1] == -123234:
+        if game_2048[1] == 'end_game':
             final_2048(message, game_2048)
         else:
             with open('params.json', 'r') as f:
