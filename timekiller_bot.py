@@ -8,16 +8,34 @@ import random
 import logging
 
 logging.basicConfig(filename="logger/timekiller_bot.log", level=logging.INFO)
-# telebot.apihelper.proxy = {'https': 'socks5h://139.59.137.156:1080'}
+telebot.apihelper.proxy = config.proxy
 bot = telebot.TeleBot(config.token_timekiller_bot)
 
 
-def end_2048(end):
+def count_score_2048(end):
     top_score = 0
     for i in range(0, 4):
         for j in range(0, 4):
             top_score += end[i][j]
     return top_score
+
+
+def final_2048(message, score_now):
+    with open('params.json', 'r') as f:
+        load_json = json.load(f)
+    with open('params.json', 'w') as f:
+        load_json.update({str(message.chat.id): {
+            'game_2048': add_element([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]),
+            'username': message.chat.username, 'first_name': message.chat.first_name,
+            'last_name': message.chat.last_name,
+            'top_score': max(score_now[0], load_json[str(message.chat.id)]['top_score'])}})
+        json.dump(load_json, f, indent=2)
+        logging.info("User {uname} lose game: 2048 | score: {score}.".format(uname=message.chat.username,
+                                                                             score=str(score_now[0])))
+        bot.send_message(message.chat.id,
+                         "💢  GAME OVER  💢\nYour score now: " + str(score_now[0]) + "!\nYour top score:" + str(max(
+                             score_now[0], load_json[str(message.chat.id)]['top_score'])),
+                         reply_markup=update_keyboard_2048(score_now))
 
 
 def add_element(ae):
@@ -34,18 +52,22 @@ def add_element(ae):
             if 0 < i < 3:
                 if ae[i - 1][j] == ae[i][j] or ae[i + 1][j] == ae[i][j]:
                     merge += 1
-    if len(zero_points[0]) <= 1 and merge == 0:
-        temp = end_2048(ae) + (4 if random.randint(1, 10) == 7 else 2)
-        ae = [temp, -123234]
-        return ae
-    else:
+    if len(zero_points[0]) == 1 and merge == 0:
         i = random.randint(0, len(zero_points[0]) - 1)
         ae[zero_points[0][i]][zero_points[1][i]] = 4 if random.randint(1, 10) == 7 else 2
+        return add_element(ae)
+    if len(zero_points[0]) == 0 and merge == 0:
+        temp = count_score_2048(ae) + (4 if random.randint(1, 10) == 7 else 2)
+        return [temp, -123234]
+    else:
+        if len(zero_points[0]) != 0:
+            i = random.randint(0, len(zero_points[0]) - 1)
+            ae[zero_points[0][i]][zero_points[1][i]] = 4 if random.randint(1, 10) == 7 else 2
         return ae
 
 
 def swap_all(game_2048, i):
-    if i == 1:
+    if i == "move_right":
         game_2048[0][0], game_2048[0][3] = game_2048[0][3], game_2048[0][0]
         game_2048[0][1], game_2048[0][2] = game_2048[0][2], game_2048[0][1]
         game_2048[1][0], game_2048[1][3] = game_2048[1][3], game_2048[1][0]
@@ -61,19 +83,19 @@ def swap_all(game_2048, i):
               [0, 0, 0, 0],
               [0, 0, 0, 0]]
 
-    if i == 2:
+    if i == "move_up":
         for j in range(4):
             for i in range(4):
                 invert[j][i] = game_2048[i][j]
         return invert
 
-    if i == 3:
+    if i == "move_down_to":
         for j in range(3, -1, -1):
             for i in range(3, -1, -1):
                 invert[3 - j][3 - i] = game_2048[i][j]
         return invert
 
-    if i == 4:
+    if i == "move_down_back":
         for j in range(3, -1, -1):
             for i in range(3, -1, -1):
                 invert[3 - i][3 - j] = game_2048[j][i]
@@ -82,7 +104,6 @@ def swap_all(game_2048, i):
 
 def permutation(game_2048):
     skip_move = -1
-    # TODO fix add without move
     for i in range(0, 4):
         for j in range(1, 4):
             if game_2048[i][j] == 0 | (
@@ -207,10 +228,7 @@ def find_text(message):
             text = "⬅ Move left ⬅"
 
         if game_2048[1] == -123234:
-            logging.info("User {uname} lose game: 2048 | score: {score}.".format(uname=message.chat.username,
-                                                                                 score=str(game_2048[0])))
-            bot.send_message(message.chat.id, "💢  GAME OVER  💢\nYour score: " + str(game_2048[0]) + "!",
-                             reply_markup=update_keyboard_2048(game_2048))
+            final_2048(message, game_2048)
         else:
             with open('params.json', 'r') as f:
                 load_json = json.load(f)
@@ -227,7 +245,8 @@ def find_text(message):
     elif message.text == '⬇️':
         with open('params.json', 'r') as f:
             load_json = json.load(f)
-        game_2048 = swap_all(permutation(swap_all(load_json[str(message.chat.id)]['game_2048'], 3)), 4)
+        game_2048 = swap_all(permutation(swap_all(load_json[str(message.chat.id)]['game_2048'], "move_down_to")),
+                             "move_down_back")
 
         if game_2048[0][0] == -1:
             game_2048 = load_json[str(message.chat.id)]['game_2048']
@@ -237,10 +256,7 @@ def find_text(message):
             text = "⬇ Move down ⬇"
 
         if game_2048[1] == -123234:
-            logging.info("User {uname} lose game: 2048 | score: {score}.".format(uname=message.chat.username,
-                                                                                 score=str(game_2048[0])))
-            bot.send_message(message.chat.id, "💢  GAME OVER  💢\nYour score: " + str(game_2048[0]) + "!",
-                             reply_markup=update_keyboard_2048(game_2048))
+            final_2048(message, game_2048)
         else:
             with open('params.json', 'r') as f:
                 load_json = json.load(f)
@@ -257,7 +273,7 @@ def find_text(message):
     elif message.text == '⬆️':
         with open('params.json', 'r') as f:
             load_json = json.load(f)
-        game_2048 = swap_all(permutation(swap_all(load_json[str(message.chat.id)]['game_2048'], 2)), 2)
+        game_2048 = swap_all(permutation(swap_all(load_json[str(message.chat.id)]['game_2048'], "move_up")), "move_up")
 
         if game_2048[0][0] == -1:
             game_2048 = load_json[str(message.chat.id)]['game_2048']
@@ -267,10 +283,7 @@ def find_text(message):
             text = "⬆️ Move up ⬆️"
 
         if game_2048[1] == -123234:
-            logging.info("User {uname} lose game: 2048 | score: {score}.".format(uname=message.chat.username,
-                                                                                 score=str(game_2048[0])))
-            bot.send_message(message.chat.id, "💢  GAME OVER  💢\nYour score: " + str(game_2048[0]) + "!",
-                             reply_markup=update_keyboard_2048(game_2048))
+            final_2048(message, game_2048)
         else:
             with open('params.json', 'r') as f:
                 load_json = json.load(f)
@@ -287,19 +300,16 @@ def find_text(message):
     elif message.text == '➡️':
         with open('params.json', 'r') as f:
             load_json = json.load(f)
-        game_2048 = permutation(swap_all(load_json[str(message.chat.id)]['game_2048'], 1))
+        game_2048 = permutation(swap_all(load_json[str(message.chat.id)]['game_2048'], "move_right"))
         if game_2048[0][0] == -1:
-            game_2048 = swap_all(load_json[str(message.chat.id)]['game_2048'], 1)
+            game_2048 = swap_all(load_json[str(message.chat.id)]['game_2048'], "move_right")
             text = "NOPE\n🤛🏼😈🤜🏼"
         else:
-            game_2048 = add_element(swap_all(game_2048, 1))
+            game_2048 = add_element(swap_all(game_2048, "move_right"))
             text = "➡ Move right ➡"
 
         if game_2048[1] == -123234:
-            logging.info("User {uname} lose game: 2048 | score: {score}.".format(uname=message.chat.username,
-                                                                                 score=str(game_2048[0])))
-            bot.send_message(message.chat.id, "💢  GAME OVER  💢\nYour score: " + str(game_2048[0]) + "!",
-                             reply_markup=update_keyboard_2048(game_2048))
+            final_2048(message, game_2048)
         else:
             with open('params.json', 'r') as f:
                 load_json = json.load(f)
