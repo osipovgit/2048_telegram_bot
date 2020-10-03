@@ -1,4 +1,3 @@
-# python3 -m pip install pytelegrambotapi --upgrade
 # -*- coding: utf-8 -*-
 import json
 from telebot import types
@@ -6,26 +5,37 @@ import config
 import telebot
 import random
 import logging
+import psycopg2
 
 logging.basicConfig(filename="logger/timekiller_bot.log", level=logging.INFO)
-telebot.apihelper.proxy = config.proxy
 bot = telebot.TeleBot(config.token_timekiller_bot)
 
 
-def count_score_2048(count_end):
-    top_score = 0
-    for i in range(0, 4):
-        for j in range(0, 4):
-            top_score += count_end[i][j]
-    return top_score
+def total_count_of_score_on_field(count_end) -> int:
+    """
+    Подсчет количества очков после завершения игры.
+    :param count_end: Поле после окончания игры
+    :return: (int) количество очков на поле
+    """
+    score_now = 0
+    for i in range(4):
+        for j in range(4):
+            score_now += count_end[i][j]
+    return score_now
 
 
 def final_2048(message, score_now):
+    """
+    Обнуление значений на поле, вывод сообщеня о завершении игры и количества набранных очков.
+    :param message: (JSON) сообщение от пользователя
+    :param score_now: Количество очков в этой игре
+    :return: (int) количество очков на поле
+    """
     with open('params.json', 'r') as f:
         load_json = json.load(f)
     with open('params.json', 'w') as f:
         load_json.update({str(message.chat.id): {
-            'game_2048': add_element([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]),
+            'game_2048': add_element(config.new_field),
             'username': message.chat.username, 'first_name': message.chat.first_name,
             'last_name': message.chat.last_name,
             'top_score': max(score_now[0], load_json[str(message.chat.id)]['top_score'])}})
@@ -39,10 +49,19 @@ def final_2048(message, score_now):
 
 
 def add_element(ae):
-    zero_points = [[], []]
-    merge = 0
-    for i in range(0, 4):
-        for j in range(0, 4):
+    """
+    Проверка поля на возможность добавить и объединить элементы.
+    1) Если есть свободное место добавляет в случайное пустое поле 2 или 4 (4 с вероятностью 10%);
+    2) Если мета нет проверяет можно ли объединить какие-либо клетки
+    (ячейки по вертикали или горизонтали имеют одно значение);
+    3) Если это невозможно - игра завершена: подсчитывается общее кол-во очков.
+    :param ae: Игровое поле пользователя
+    :return: 1) Поле с новым значением в пустом месте; 2)  3) ['кол-во очков', 'end_game']
+    """
+    zero_points = [[], []]  # Хранит координаты клеток, значения которых равны 0
+    merge = 0  # Хранит количество возможных объединений
+    for i in range(4):
+        for j in range(4):
             if ae[i][j] == 0:
                 zero_points[0].append(i)
                 zero_points[1].append(j)
@@ -57,7 +76,7 @@ def add_element(ae):
         ae[zero_points[0][i]][zero_points[1][i]] = 4 if random.randint(1, 10) == 7 else 2
         return add_element(ae)
     if len(zero_points[0]) == 0 and merge == 0:
-        temp = count_score_2048(ae) + (4 if random.randint(1, 10) == 7 else 2)
+        temp = total_count_of_score_on_field(ae) + (4 if random.randint(1, 10) == 7 else 2)
         return [temp, 'end_game']
     else:
         if len(zero_points[0]) != 0:
@@ -66,8 +85,14 @@ def add_element(ae):
         return ae
 
 
-def swap_all(game_2048, i):
-    if i == "move_right":
+def swap_all(game_2048, move_to):
+    """
+    Выполняет перестановку поля так, чтобы выполнять сдвиг и слияние влево и вернуть все назад.
+    :param move_to: Необходимое действие с полем
+    :param game_2048: Игровое поле
+    :return: Поле в результате перестановок
+    """
+    if move_to == "move_right":
         game_2048[0][0], game_2048[0][3] = game_2048[0][3], game_2048[0][0]
         game_2048[0][1], game_2048[0][2] = game_2048[0][2], game_2048[0][1]
         game_2048[1][0], game_2048[1][3] = game_2048[1][3], game_2048[1][0]
@@ -83,19 +108,19 @@ def swap_all(game_2048, i):
               [0, 0, 0, 0],
               [0, 0, 0, 0]]
 
-    if i == "move_up":
+    if move_to == "move_up":
         for j in range(4):
             for i in range(4):
                 invert[j][i] = game_2048[i][j]
         return invert
 
-    if i == "move_down_to":
+    if move_to == "move_down_to":
         for j in range(3, -1, -1):
             for i in range(3, -1, -1):
                 invert[3 - j][3 - i] = game_2048[i][j]
         return invert
 
-    if i == "move_down_back":
+    if move_to == "move_down_back":
         for j in range(3, -1, -1):
             for i in range(3, -1, -1):
                 invert[3 - i][3 - j] = game_2048[j][i]
@@ -103,8 +128,14 @@ def swap_all(game_2048, i):
 
 
 def permutation(game_2048):
+    """
+    Выполняет сдвиг и слияние всех клеток на поле влево.
+    Если не удалось сдвинуть ни одну клетку - возврящает поле, все значения которого равны -1.
+    :param game_2048: Игровое поле
+    :return: Получившееся игровое поле
+    """
     skip_move = -1
-    for i in range(0, 4):
+    for i in range(4):
         for j in range(1, 4):
             if game_2048[i][j] == 0 | (
                     game_2048[i][j - 1] != game_2048[i][j] and game_2048[i][j] != 0 and game_2048[i][j - 1] != 0):
@@ -179,7 +210,7 @@ def start(message):
     with open('params.json', 'r') as f:
         load_json = json.load(f)
     with open('params.json', 'w') as f:
-        load_json.update({str(message.chat.id): {'game_2048': [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
+        load_json.update({str(message.chat.id): {'game_2048': config.new_field,
                                                  'username': message.chat.username,
                                                  'first_name': message.chat.first_name,
                                                  'last_name': message.chat.last_name, 'top_score': 0}})
@@ -199,7 +230,7 @@ def find_text(message):
             load_json = json.load(f)
         with open('params.json', 'w') as f:
             load_json.update({str(message.chat.id): {
-                'game_2048': add_element([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]),
+                'game_2048': add_element(config.new_field),
                 'username': message.chat.username, 'first_name': message.chat.first_name,
                 'last_name': message.chat.last_name, 'top_score': load_json[str(message.chat.id)]['top_score']}})
             json.dump(load_json, f, indent=2)
@@ -341,4 +372,4 @@ def find_text(message):
                          reply_markup=update_keyboard_2048(load_json[str(message.chat.id)]['game_2048']))
 
 
-bot.polling(none_stop=True, timeout=123)
+bot.polling()
