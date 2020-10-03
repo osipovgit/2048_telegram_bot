@@ -1,4 +1,3 @@
 token_timekiller_bot = ''
 base_info = []
-http = ''
-proxy = {'http': http, 'https': http}
+new_field = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
