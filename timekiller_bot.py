@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+import os
 from telebot import types
 import config
 import telebot
@@ -7,15 +8,61 @@ import random
 import logging
 import psycopg2
 
-logging.basicConfig(filename="logger/timekiller_bot.log", level=logging.INFO)
 bot = telebot.TeleBot(config.token_timekiller_bot)
+
+
+def database_executing(exec_type, message):
+    """
+    Запросы к БД: создание таблицы, пользователя, поиск пользователя и изменение его полей.
+    :param exec_type: Тип запроса: bot_start, new_user, get_user, set_user
+    :param message: (JSON) сообщение пользователя
+    :return: (dict) объект из БД или сообщение о том, что такого пользователя не существует.
+    """
+    con = psycopg2.connect(database=config.database_info['database'], user=config.database_info['user'],
+                           password=config.database_info['password'], host=config.database_info['host'],
+                           port=config.database_info['port'])
+    cur = con.cursor()
+
+    if exec_type == 'bot_start':
+        cur.execute("""CREATE TABLE IF NOT EXISTS tk_bot 
+                       (tg_id INTEGER,
+                       username VARCHAR (32),
+                       first_name VARCHAR (32),
+                       last_name VARCHAR (32),
+                       top_score SMALLINT,
+                       playing_field SMALLINT []);""")
+    elif exec_type == 'new_user':
+        cur.execute('''INSERT INTO tk_bot (tg_id, username, first_name, last_name, top_score, playing_field)
+                    VALUES ({TG_ID}, \'{USERNAME}\', \'{FIRST_NAME}\', \'{LAST_NAME}\', 0, ARRAY {FIELD})'''
+                    .format(TG_ID=message.chat.id, USERNAME=message.chat.username, FIRST_NAME=message.chat.first_name,
+                            LAST_NAME=message.chat.last_name, FIELD=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
+    elif exec_type == 'get_user':
+        cur.execute('SELECT * FROM tk_bot WHERE tg_id={TG_ID}'.format(TG_ID=message.chat.id))
+        entity = cur.fetchone()
+        if entity is None:
+            return ['user does not exist']
+        else:
+            game_field = [[entity[5][0], entity[5][1], entity[5][2], entity[5][3]],
+                          [entity[5][4], entity[5][5], entity[5][6], entity[5][7]],
+                          [entity[5][8], entity[5][9], entity[5][10], entity[5][11]],
+                          [entity[5][12], entity[5][13], entity[5][14], entity[5][15]]]
+
+            user = dict(tg_id=entity[0], username=entity[1], first_name=entity[2], last_name=entity[3],
+                        top_score=entity[4], playing_field=game_field)
+            print(user)
+            return user
+    # elif exec_type == 'set_user':
+
+    con.commit()
+    cur.close()
+    con.close()
 
 
 def total_count_of_score_on_field(count_end) -> int:
     """
     Подсчет количества очков после завершения игры.
     :param count_end: Поле после окончания игры
-    :return: (int) количество очков на поле
+    :return: (int) Количество очков на поле
     """
     score_now = 0
     for i in range(4):
@@ -29,7 +76,6 @@ def final_2048(message, score_now):
     Обнуление значений на поле, вывод сообщеня о завершении игры и количества набранных очков.
     :param message: (JSON) сообщение от пользователя
     :param score_now: Количество очков в этой игре
-    :return: (int) количество очков на поле
     """
     with open('params.json', 'r') as f:
         load_json = json.load(f)
@@ -85,7 +131,7 @@ def add_element(ae):
         return ae
 
 
-def swap_all(game_2048, move_to):
+def swap_2048_field(game_2048, move_to):
     """
     Выполняет перестановку поля так, чтобы выполнять сдвиг и слияние влево и вернуть все назад.
     :param move_to: Необходимое действие с полем
@@ -103,10 +149,7 @@ def swap_all(game_2048, move_to):
         game_2048[3][1], game_2048[3][2] = game_2048[3][2], game_2048[3][1]
         return game_2048
 
-    invert = [[0, 0, 0, 0],
-              [0, 0, 0, 0],
-              [0, 0, 0, 0],
-              [0, 0, 0, 0]]
+    invert = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
 
     if move_to == "move_up":
         for j in range(4):
@@ -127,7 +170,7 @@ def swap_all(game_2048, move_to):
         return invert
 
 
-def permutation(game_2048):
+def permutation_cells_on_field(game_2048):
     """
     Выполняет сдвиг и слияние всех клеток на поле влево.
     Если не удалось сдвинуть ни одну клетку - возврящает поле, все значения которого равны -1.
@@ -165,7 +208,13 @@ def permutation(game_2048):
 
 
 def update_keyboard_2048(game_2048):
-    if game_2048[1] == 'end_game':
+    """
+    Если игра не закончена - создает игровое поле и стрелки для смещения поля внутри клавиатуры,
+    иначе возвращает меню навигации.
+    :param game_2048: Игровое поле
+    :return: Клавиатура пользователя
+    """
+    if game_2048[1] == 'end_game' or game_2048[0] == 'main_menu':
         keyboard = types.ReplyKeyboardMarkup(row_width=1)
         btn = types.KeyboardButton("2️⃣ 0️⃣ 4️⃣ 8️⃣")
         keyboard.add(btn)
@@ -202,20 +251,16 @@ def update_keyboard_2048(game_2048):
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    """
+    Определяет действие на команду '/start': регистрирует пользователя в БД, отправляет приветственное сообщение,
+    выводит меню.
+    :param message: (JSON) сообщение от пользователя
+    """
     logging.info("User {uname} [{fn} {ln}] start bot.".format(uname=message.chat.username, fn=message.chat.first_name,
                                                               ln=message.chat.last_name))
-    keyboard = types.ReplyKeyboardMarkup(row_width=4)
-    btn1 = types.KeyboardButton("2️⃣ 0️⃣ 4️⃣ 8️⃣")
-    keyboard.add(btn1)
-    with open('params.json', 'r') as f:
-        load_json = json.load(f)
-    with open('params.json', 'w') as f:
-        load_json.update({str(message.chat.id): {'game_2048': config.new_field,
-                                                 'username': message.chat.username,
-                                                 'first_name': message.chat.first_name,
-                                                 'last_name': message.chat.last_name, 'top_score': 0}})
-        json.dump(load_json, f, indent=2)
-
+    keyboard = update_keyboard_2048(['main_menu', ''])
+    if database_executing('get_user', message=message) == ['user does not exist']:
+        database_executing('new_user', message=message)
     bot.send_message(message.chat.id,
                      "Settle down, relax and get comfy because you, my friend... are going nowhere.\n"
                      + "How about we play one more game, " + message.chat.first_name + "?",
@@ -249,7 +294,7 @@ def find_text(message):
     elif message.text == '⬅️':
         with open('params.json', 'r') as f:
             load_json = json.load(f)
-        game_2048 = permutation(load_json[str(message.chat.id)]['game_2048'])
+        game_2048 = permutation_cells_on_field(load_json[str(message.chat.id)]['game_2048'])
 
         if game_2048[0][0] == -1:
             game_2048 = load_json[str(message.chat.id)]['game_2048']
@@ -276,8 +321,9 @@ def find_text(message):
     elif message.text == '⬇️':
         with open('params.json', 'r') as f:
             load_json = json.load(f)
-        game_2048 = swap_all(permutation(swap_all(load_json[str(message.chat.id)]['game_2048'], "move_down_to")),
-                             "move_down_back")
+        game_2048 = swap_2048_field(
+            permutation_cells_on_field(swap_2048_field(load_json[str(message.chat.id)]['game_2048'], "move_down_to")),
+            "move_down_back")
 
         if game_2048[0][0] == -1:
             game_2048 = load_json[str(message.chat.id)]['game_2048']
@@ -304,7 +350,9 @@ def find_text(message):
     elif message.text == '⬆️':
         with open('params.json', 'r') as f:
             load_json = json.load(f)
-        game_2048 = swap_all(permutation(swap_all(load_json[str(message.chat.id)]['game_2048'], "move_up")), "move_up")
+        game_2048 = swap_2048_field(
+            permutation_cells_on_field(swap_2048_field(load_json[str(message.chat.id)]['game_2048'], "move_up")),
+            "move_up")
 
         if game_2048[0][0] == -1:
             game_2048 = load_json[str(message.chat.id)]['game_2048']
@@ -331,12 +379,13 @@ def find_text(message):
     elif message.text == '➡️':
         with open('params.json', 'r') as f:
             load_json = json.load(f)
-        game_2048 = permutation(swap_all(load_json[str(message.chat.id)]['game_2048'], "move_right"))
+        game_2048 = permutation_cells_on_field(
+            swap_2048_field(load_json[str(message.chat.id)]['game_2048'], "move_right"))
         if game_2048[0][0] == -1:
-            game_2048 = swap_all(load_json[str(message.chat.id)]['game_2048'], "move_right")
+            game_2048 = swap_2048_field(load_json[str(message.chat.id)]['game_2048'], "move_right")
             text = "NOPE\n🤛🏼😈🤜🏼"
         else:
-            game_2048 = add_element(swap_all(game_2048, "move_right"))
+            game_2048 = add_element(swap_2048_field(game_2048, "move_right"))
             text = "➡ Move right ➡"
 
         if game_2048[1] == 'end_game':
@@ -372,4 +421,9 @@ def find_text(message):
                          reply_markup=update_keyboard_2048(load_json[str(message.chat.id)]['game_2048']))
 
 
-bot.polling()
+if __name__ == "__main__":
+    if not os.path.exists('logger'):
+        os.mkdir('logger')
+    logging.basicConfig(filename="logger/timekiller_bot.log", level=logging.INFO)
+    database_executing('bot_start', None)
+    bot.polling()
