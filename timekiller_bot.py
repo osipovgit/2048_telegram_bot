@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import json
 import os
 from telebot import types
 import config
@@ -11,7 +10,7 @@ import psycopg2
 bot = telebot.TeleBot(config.token_timekiller_bot)
 
 
-def database_executing(exec_type, message):
+def database_executing(exec_type, message, **kwargs):
     """
     Запросы к БД: создание таблицы, пользователя, поиск пользователя и изменение его полей.
     :param exec_type: Тип запроса: bot_start, new_user, get_user, set_user
@@ -24,7 +23,7 @@ def database_executing(exec_type, message):
     cur = con.cursor()
 
     if exec_type == 'bot_start':
-        cur.execute("""CREATE TABLE IF NOT EXISTS tk_bot 
+        cur.execute("""CREATE TABLE IF NOT EXISTS lets_2048_bot 
                        (tg_id INTEGER,
                        username VARCHAR (32),
                        first_name VARCHAR (32),
@@ -32,12 +31,12 @@ def database_executing(exec_type, message):
                        top_score SMALLINT,
                        playing_field SMALLINT []);""")
     elif exec_type == 'new_user':
-        cur.execute('''INSERT INTO tk_bot (tg_id, username, first_name, last_name, top_score, playing_field)
+        cur.execute('''INSERT INTO lets_2048_bot (tg_id, username, first_name, last_name, top_score, playing_field)
                     VALUES ({TG_ID}, \'{USERNAME}\', \'{FIRST_NAME}\', \'{LAST_NAME}\', 0, ARRAY {FIELD})'''
                     .format(TG_ID=message.chat.id, USERNAME=message.chat.username, FIRST_NAME=message.chat.first_name,
                             LAST_NAME=message.chat.last_name, FIELD=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
     elif exec_type == 'get_user':
-        cur.execute('SELECT * FROM tk_bot WHERE tg_id={TG_ID}'.format(TG_ID=message.chat.id))
+        cur.execute('SELECT * FROM lets_2048_bot WHERE tg_id={TG_ID}'.format(TG_ID=message.chat.id))
         entity = cur.fetchone()
         if entity is None:
             return ['user does not exist']
@@ -46,12 +45,17 @@ def database_executing(exec_type, message):
                           [entity[5][4], entity[5][5], entity[5][6], entity[5][7]],
                           [entity[5][8], entity[5][9], entity[5][10], entity[5][11]],
                           [entity[5][12], entity[5][13], entity[5][14], entity[5][15]]]
-
-            user = dict(tg_id=entity[0], username=entity[1], first_name=entity[2], last_name=entity[3],
+            return dict(tg_id=entity[0], username=entity[1], first_name=entity[2], last_name=entity[3],
                         top_score=entity[4], playing_field=game_field)
-            print(user)
-            return user
-    # elif exec_type == 'set_user':
+    elif exec_type == 'set_user':
+        if kwargs.get('field') is not None:
+            cur.execute('UPDATE lets_2048_bot SET playing_field=\'{FIELD}\' WHERE tg_id={TG_ID}'
+                        .format(TG_ID=message.chat.id,
+                                FIELD={kwargs.get('field')[i][j] for i in range(4) for j in range(4)}))
+        if kwargs.get('score') is not None:
+            cur.execute('UPDATE lets_2048_bot SET top_score={SCORE} WHERE tg_id={TG_ID}'
+                        .format(TG_ID=message.chat.id,
+                                SCORE=kwargs.get('score')))
 
     con.commit()
     cur.close()
@@ -77,21 +81,14 @@ def final_2048(message, score_now):
     :param message: (JSON) сообщение от пользователя
     :param score_now: Количество очков в этой игре
     """
-    with open('params.json', 'r') as f:
-        load_json = json.load(f)
-    with open('params.json', 'w') as f:
-        load_json.update({str(message.chat.id): {
-            'game_2048': add_element(config.new_field),
-            'username': message.chat.username, 'first_name': message.chat.first_name,
-            'last_name': message.chat.last_name,
-            'top_score': max(score_now[0], load_json[str(message.chat.id)]['top_score'])}})
-        json.dump(load_json, f, indent=2)
-        logging.info("User {uname} lose game: 2048 | score: {score}.".format(uname=message.chat.username,
+    user = database_executing('get_user', message=message)
+    database_executing('set_user', message=message, score=score_now[0], field=add_element(config.new_field))
+    logging.info("User {uname} ends the game: 2048 | score: {score}.".format(uname=message.chat.username,
                                                                              score=str(score_now[0])))
-        bot.send_message(message.chat.id,
-                         "💢  GAME OVER  💢\nYour score now: " + str(score_now[0]) + "!\nYour top score:" + str(max(
-                             score_now[0], load_json[str(message.chat.id)]['top_score'])),
-                         reply_markup=update_keyboard_2048(score_now))
+    bot.send_message(message.chat.id,
+                     "💢  GAME OVER  💢\nYour score now: " + str(score_now[0]) + "!\nYour top score:"
+                     + str(max(score_now[0], user.get('top_score'))),
+                     reply_markup=update_keyboard_2048(score_now))
 
 
 def add_element(ae):
@@ -271,17 +268,8 @@ def start(message):
 def find_text(message):
     if message.text == '2️⃣ 0️⃣ 4️⃣ 8️⃣':
         logging.info("User {uname} start 2048.".format(uname=message.chat.username))
-        with open('params.json', 'r') as f:
-            load_json = json.load(f)
-        with open('params.json', 'w') as f:
-            load_json.update({str(message.chat.id): {
-                'game_2048': add_element(config.new_field),
-                'username': message.chat.username, 'first_name': message.chat.first_name,
-                'last_name': message.chat.last_name, 'top_score': load_json[str(message.chat.id)]['top_score']}})
-            json.dump(load_json, f, indent=2)
-
-        with open('params.json', 'r') as f:
-            load_json = json.load(f)
+        database_executing('set_user', message=message, field=add_element(config.new_field))
+        user = database_executing('get_user', message=message)
         bot.send_message(message.chat.id,
                          "Let's start the game! \n2️⃣ 0️⃣ 4️⃣ 8️⃣\n📜Rules:\n "
                          "You have to combine various tiles starting with a tile of 2 and combining them "
@@ -289,15 +277,14 @@ def find_text(message):
                          "tile to make it into a tile of \'4\' and then combining it with a tile of \'4\' "
                          "to make a tile of \'8\' and so on.\nPress the corresponding arrows on the custom keyboard"
                          " and set a new record!",
-                         reply_markup=update_keyboard_2048(load_json[str(message.chat.id)]['game_2048']))
+                         reply_markup=update_keyboard_2048(user.get('playing_field')))
 
     elif message.text == '⬅️':
-        with open('params.json', 'r') as f:
-            load_json = json.load(f)
-        game_2048 = permutation_cells_on_field(load_json[str(message.chat.id)]['game_2048'])
+        user = database_executing('get_user', message=message)
+        game_2048 = permutation_cells_on_field(user.get('playing_field'))
 
         if game_2048[0][0] == -1:
-            game_2048 = load_json[str(message.chat.id)]['game_2048']
+            game_2048 = user.get('playing_field')
             text = "NOPE\n🤛🏼😈🤜🏼"
         else:
             game_2048 = add_element(game_2048)
@@ -306,27 +293,18 @@ def find_text(message):
         if game_2048[1] == 'end_game':
             final_2048(message, game_2048)
         else:
-            with open('params.json', 'r') as f:
-                load_json = json.load(f)
-            with open('params.json', 'w') as f:
-                load_json.update({str(message.chat.id): {
-                    'game_2048': game_2048,
-                    'username': message.chat.username, 'first_name': message.chat.first_name,
-                    'last_name': message.chat.last_name, 'top_score': load_json[str(message.chat.id)]['top_score']}})
-                json.dump(load_json, f, indent=2)
-
+            database_executing('set_user', message=message, field=game_2048)
             game_2048 = update_keyboard_2048(game_2048)
             bot.send_message(message.chat.id, text, reply_markup=game_2048)
 
     elif message.text == '⬇️':
-        with open('params.json', 'r') as f:
-            load_json = json.load(f)
+        user = database_executing('get_user', message=message)
         game_2048 = swap_2048_field(
-            permutation_cells_on_field(swap_2048_field(load_json[str(message.chat.id)]['game_2048'], "move_down_to")),
+            permutation_cells_on_field(swap_2048_field(user.get('playing_field'), "move_down_to")),
             "move_down_back")
 
         if game_2048[0][0] == -1:
-            game_2048 = load_json[str(message.chat.id)]['game_2048']
+            game_2048 = user.get('playing_field')
             text = "NOPE\n🤛🏼😈🤜🏼"
         else:
             game_2048 = add_element(game_2048)
@@ -335,27 +313,18 @@ def find_text(message):
         if game_2048[1] == 'end_game':
             final_2048(message, game_2048)
         else:
-            with open('params.json', 'r') as f:
-                load_json = json.load(f)
-            with open('params.json', 'w') as f:
-                load_json.update({str(message.chat.id): {
-                    'game_2048': game_2048,
-                    'username': message.chat.username, 'first_name': message.chat.first_name,
-                    'last_name': message.chat.last_name, 'top_score': load_json[str(message.chat.id)]['top_score']}})
-                json.dump(load_json, f, indent=2)
-
+            database_executing('set_user', message=message, field=game_2048)
             game_2048 = update_keyboard_2048(game_2048)
             bot.send_message(message.chat.id, text, reply_markup=game_2048)
 
     elif message.text == '⬆️':
-        with open('params.json', 'r') as f:
-            load_json = json.load(f)
+        user = database_executing('get_user', message=message)
         game_2048 = swap_2048_field(
-            permutation_cells_on_field(swap_2048_field(load_json[str(message.chat.id)]['game_2048'], "move_up")),
+            permutation_cells_on_field(swap_2048_field(user.get('playing_field'), "move_up")),
             "move_up")
 
         if game_2048[0][0] == -1:
-            game_2048 = load_json[str(message.chat.id)]['game_2048']
+            game_2048 = user.get('playing_field')
             text = "NOPE\n🤛🏼😈🤜🏼"
         else:
             game_2048 = add_element(game_2048)
@@ -364,25 +333,16 @@ def find_text(message):
         if game_2048[1] == 'end_game':
             final_2048(message, game_2048)
         else:
-            with open('params.json', 'r') as f:
-                load_json = json.load(f)
-            with open('params.json', 'w') as f:
-                load_json.update({str(message.chat.id): {
-                    'game_2048': game_2048,
-                    'username': message.chat.username, 'first_name': message.chat.first_name,
-                    'last_name': message.chat.last_name, 'top_score': load_json[str(message.chat.id)]['top_score']}})
-                json.dump(load_json, f, indent=2)
-
+            database_executing('set_user', message=message, field=game_2048)
             game_2048 = update_keyboard_2048(game_2048)
             bot.send_message(message.chat.id, text, reply_markup=game_2048)
 
     elif message.text == '➡️':
-        with open('params.json', 'r') as f:
-            load_json = json.load(f)
+        user = database_executing('get_user', message=message)
         game_2048 = permutation_cells_on_field(
-            swap_2048_field(load_json[str(message.chat.id)]['game_2048'], "move_right"))
+            swap_2048_field(user.get('playing_field'), "move_right"))
         if game_2048[0][0] == -1:
-            game_2048 = swap_2048_field(load_json[str(message.chat.id)]['game_2048'], "move_right")
+            game_2048 = swap_2048_field(user.get('playing_field'), "move_right")
             text = "NOPE\n🤛🏼😈🤜🏼"
         else:
             game_2048 = add_element(swap_2048_field(game_2048, "move_right"))
@@ -391,34 +351,23 @@ def find_text(message):
         if game_2048[1] == 'end_game':
             final_2048(message, game_2048)
         else:
-            with open('params.json', 'r') as f:
-                load_json = json.load(f)
-            with open('params.json', 'w') as f:
-                load_json.update({str(message.chat.id): {
-                    'game_2048': game_2048,
-                    'username': message.chat.username, 'first_name': message.chat.first_name,
-                    'last_name': message.chat.last_name, 'top_score': load_json[str(message.chat.id)]['top_score']}})
-                json.dump(load_json, f, indent=2)
-
+            database_executing('set_user', message=message, field=game_2048)
             game_2048 = update_keyboard_2048(game_2048)
-            bot.send_message(message.chat.id, text,
-                             reply_markup=game_2048)
+            bot.send_message(message.chat.id, text, reply_markup=game_2048)
 
     elif message.text == '0' or message.text == '2' or message.text == '4' or message.text == '8' \
             or message.text == '16' or message.text == '32' or message.text == '64' or message.text == '128' \
             or message.text == '256' or message.text == '512' or message.text == '1024' or message.text == '2048' \
             or message.text == '4096':
-        with open('params.json', 'r') as f:
-            load_json = json.load(f)
+        user = database_executing('get_user', message=message)
         bot.send_message(message.chat.id, "I appeal to you to leave the numbers unchanged.",
-                         reply_markup=update_keyboard_2048(load_json[str(message.chat.id)]['game_2048']))
+                         reply_markup=update_keyboard_2048(user.get('playing_field')))
     else:
-        with open('params.json', 'r') as f:
-            load_json = json.load(f)
+        user = database_executing('get_user', message=message)
         bot.send_message(message.chat.id,
                          "To be honest, I don't understand the reasons for such actions...\n"
                          "Don't write to me anymore. JUST PLAY!",
-                         reply_markup=update_keyboard_2048(load_json[str(message.chat.id)]['game_2048']))
+                         reply_markup=update_keyboard_2048(user.get('playing_field')))
 
 
 if __name__ == "__main__":
