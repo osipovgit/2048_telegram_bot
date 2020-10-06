@@ -29,29 +29,33 @@ def database_executing(exec_type, message, **kwargs):
                        first_name VARCHAR (32),
                        last_name VARCHAR (32),
                        top_score SMALLINT,
-                       playing_field SMALLINT []);""")
+                       playing_field VARCHAR);""")
     elif exec_type == 'new_user':
         cur.execute('''INSERT INTO lets_2048_bot (tg_id, username, first_name, last_name, top_score, playing_field)
-                    VALUES ({TG_ID}, \'{USERNAME}\', \'{FIRST_NAME}\', \'{LAST_NAME}\', 0, ARRAY {FIELD})'''
+                    VALUES ({TG_ID}, \'{USERNAME}\', \'{FIRST_NAME}\', \'{LAST_NAME}\', 0, \'{FIELD}\')'''
                     .format(TG_ID=message.chat.id, USERNAME=message.chat.username, FIRST_NAME=message.chat.first_name,
-                            LAST_NAME=message.chat.last_name, FIELD=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
+                            LAST_NAME=message.chat.last_name, FIELD='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'))
     elif exec_type == 'get_user':
         cur.execute('SELECT * FROM lets_2048_bot WHERE tg_id={TG_ID}'.format(TG_ID=message.chat.id))
         entity = cur.fetchone()
         if entity is None:
             return ['user does not exist']
         else:
-            game_field = [[entity[5][0], entity[5][1], entity[5][2], entity[5][3]],
-                          [entity[5][4], entity[5][5], entity[5][6], entity[5][7]],
-                          [entity[5][8], entity[5][9], entity[5][10], entity[5][11]],
-                          [entity[5][12], entity[5][13], entity[5][14], entity[5][15]]]
+            game_field = entity[5].split()
+            game_field = [[int(game_field[0]), int(game_field[1]), int(game_field[2]), int(game_field[3])],
+                          [int(game_field[4]), int(game_field[5]), int(game_field[6]), int(game_field[7])],
+                          [int(game_field[8]), int(game_field[9]), int(game_field[10]), int(game_field[11])],
+                          [int(game_field[12]), int(game_field[13]), int(game_field[14]), int(game_field[15])]]
             return dict(tg_id=entity[0], username=entity[1], first_name=entity[2], last_name=entity[3],
                         top_score=entity[4], playing_field=game_field)
     elif exec_type == 'set_user':
         if kwargs.get('field') is not None:
+            game_field_to_str = ''
+            for i in range(4):
+                for j in range(4):
+                    game_field_to_str += str(kwargs.get('field')[i][j]) + ' '
             cur.execute('UPDATE lets_2048_bot SET playing_field=\'{FIELD}\' WHERE tg_id={TG_ID}'
-                        .format(TG_ID=message.chat.id,
-                                FIELD={kwargs.get('field')[i][j] for i in range(4) for j in range(4)}))
+                        .format(TG_ID=message.chat.id, FIELD=game_field_to_str[:-1]))
         if kwargs.get('score') is not None:
             cur.execute('UPDATE lets_2048_bot SET top_score={SCORE} WHERE tg_id={TG_ID}'
                         .format(TG_ID=message.chat.id,
