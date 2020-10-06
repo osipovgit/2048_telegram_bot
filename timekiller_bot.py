@@ -86,7 +86,10 @@ def final_2048(message, score_now):
     :param score_now: Количество очков в этой игре
     """
     user = database_executing('get_user', message=message)
-    database_executing('set_user', message=message, score=score_now[0], field=add_element(config.new_field))
+    database_executing('set_user', message=message, score=score_now[0], field=add_element([[0, 0, 0, 0],
+                                                                                           [0, 0, 0, 0],
+                                                                                           [0, 0, 0, 0],
+                                                                                           [0, 0, 0, 0]]))
     logging.info("User {uname} ends the game: 2048 | score: {score}.".format(uname=message.chat.username,
                                                                              score=str(score_now[0])))
     bot.send_message(message.chat.id,
@@ -262,6 +265,10 @@ def start(message):
     keyboard = update_keyboard_2048(['main_menu', ''])
     if database_executing('get_user', message=message) == ['user does not exist']:
         database_executing('new_user', message=message)
+        database_executing('set_user', message=message, field=add_element([[0, 0, 0, 0],
+                                                                           [0, 0, 0, 0],
+                                                                           [0, 0, 0, 0],
+                                                                           [0, 0, 0, 0]]))
     bot.send_message(message.chat.id,
                      "Settle down, relax and get comfy because you, my friend... are going nowhere.\n"
                      + "How about we play one more game, " + message.chat.first_name + "?",
@@ -272,7 +279,10 @@ def start(message):
 def find_text(message):
     if message.text == '2️⃣ 0️⃣ 4️⃣ 8️⃣':
         logging.info("User {uname} start 2048.".format(uname=message.chat.username))
-        database_executing('set_user', message=message, field=add_element(config.new_field))
+        database_executing('set_user', message=message, field=add_element([[0, 0, 0, 0],
+                                                                           [0, 0, 0, 0],
+                                                                           [0, 0, 0, 0],
+                                                                           [0, 0, 0, 0]]))
         user = database_executing('get_user', message=message)
         bot.send_message(message.chat.id,
                          "Let's start the game! \n2️⃣ 0️⃣ 4️⃣ 8️⃣\n📜Rules:\n "
